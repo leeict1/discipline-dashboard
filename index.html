@@ -1,225 +1,108 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Captain Lee - Year Discipline System</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
-body{
-    font-family:Arial;
-    background:#0f172a;
-    color:white;
-    text-align:center;
-}
-h1{margin:20px;color:#38bdf8;}
-.container{
-    width:95%;
-    margin:auto;
-    background:#1e293b;
-    padding:20px;
-    border-radius:12px;
-}
-table{
-    margin:20px auto;
-    border-collapse:collapse;
-    border:2px solid #38bdf8;
-}
-th,td{
-    border:1px solid #334155;
-    padding:5px;
-    font-size:12px;
-}
-th{background:#0ea5e9;}
-td:first-child{
-    font-weight:bold;
-    background:#1e40af;
-}
-.graph-box{
-    margin-top:25px;
-    padding:15px;
-    border:2px solid #38bdf8;
-    border-radius:10px;
-}
-.stats{
-    display:flex;
-    justify-content:space-around;
-    flex-wrap:wrap;
-}
-.stat{
-    background:#0f172a;
-    padding:12px;
-    border:1px solid #38bdf8;
-    border-radius:8px;
-    margin:10px;
-    min-width:150px;
-}
-</style>
-</head>
-<body>
-
-<h1 id="monthTitle"></h1>
-
-<div class="container">
-
-<div class="stats">
-<div class="stat">Today % <br><span id="todayPercent">0%</span></div>
-<div class="stat">Monthly % <br><span id="monthlyPercent">0%</span></div>
-<div class="stat">Current Streak <br><span id="currentStreak">0</span></div>
-</div>
-
-<table id="habitTable">
-<thead>
-<tr>
-<th>Habit</th>
-</tr>
-</thead>
-<tbody></tbody>
-</table>
-
-<div class="graph-box">
-<h2>Completion Graph</h2>
-<canvas id="chart" width="800" height="400"></canvas>
-</div>
-
-</div>
-
 <script>
 
-const habits=[
-"Wakeup to Fajr",
-"Meditate 5 mins",
-"Read Book Daily",
-"Play Chess",
-"Use Peerup App",
-"Read Quran Daily",
-"Sleep Before 11PM"
+const habits = 10;
+const days = 28;
+
+const tbody = document.querySelector("#habitTable tbody");
+
+/* CREATE TABLE */
+
+for(let d=1; d<=days; d++){
+
+    const tr = document.createElement("tr");
+    let html = `<td>${d}</td>`;
+
+    for(let h=1; h<=habits; h++){
+        html += `<td>
+        <input type="checkbox" onchange="updateChart(${d},${h},this)">
+        </td>`;
+    }
+
+    html += `<td id="p${d}">0%</td>`;
+    tr.innerHTML = html;
+    tbody.appendChild(tr);
+}
+
+/* COLORS FOR EACH HABIT */
+
+const colors = [
+"#ff4d6d","#4cc9f0","#ffd60a","#80ed99","#c77dff",
+"#ff9f1c","#00f5d4","#f72585","#90dbf4","#b8f2e6"
 ];
 
-const now=new Date();
-const month=now.getMonth(); // auto month
-const year=now.getFullYear();
-const days=new Date(year,month+1,0).getDate();
-const todayIndex=now.getDate()-1;
+/* DATASET CREATE */
 
-const monthNames=["January","February","March","April","May","June","July","August","September","October","November","December"];
+const datasets = [];
 
-document.getElementById("monthTitle").innerText=
-"Captain Lee - "+monthNames[month]+" "+year+" Discipline Dashboard";
-
-const storageKey="discipline_"+year+"_"+month;
-
-let data=JSON.parse(localStorage.getItem(storageKey))||{};
-
-if(Object.keys(data).length===0){
-    habits.forEach(h=>data[h]=Array(days).fill(false));
-    localStorage.setItem(storageKey,JSON.stringify(data));
-}
-
-const headRow=document.querySelector("#habitTable thead tr");
-const body=document.querySelector("#habitTable tbody");
-
-for(let i=1;i<=days;i++){
-    let th=document.createElement("th");
-    th.innerText=i;
-    headRow.appendChild(th);
-}
-
-habits.forEach((habit,index)=>{
-    let row=document.createElement("tr");
-    let name=document.createElement("td");
-    name.innerText=(index+1)+". "+habit;
-    row.appendChild(name);
-
-    for(let i=0;i<days;i++){
-        let td=document.createElement("td");
-        let box=document.createElement("input");
-        box.type="checkbox";
-        box.checked=data[habit][i];
-
-        box.addEventListener("change",()=>{
-            data[habit][i]=box.checked;
-            localStorage.setItem(storageKey,JSON.stringify(data));
-            updateAll();
-        });
-
-        td.appendChild(box);
-        row.appendChild(td);
-    }
-
-    body.appendChild(row);
-});
-
-function dailyPercent(day){
-    let c=0;
-    habits.forEach(h=>{ if(data[h][day]) c++; });
-    return Math.round((c/habits.length)*100);
-}
-
-function monthlyPercent(){
-    let total=0,done=0;
-    habits.forEach(h=>{
-        data[h].forEach(v=>{
-            total++;
-            if(v) done++;
-        });
+for(let i=1;i<=habits;i++){
+    datasets.push({
+        label: "Habit " + i,
+        data: [],
+        borderColor: colors[i-1],
+        backgroundColor: colors[i-1],
+        showLine: false,   // IMPORTANT ❌ no connecting line
+        pointRadius: 6
     });
-    return Math.round((done/total)*100);
 }
 
-function streak(){
-    let s=0;
-    for(let d=0;d<days;d++){
-        if(dailyPercent(d)===100) s++;
-        else s=0;
-    }
-    return s;
-}
+/* CHART */
 
-let chart;
-
-function updateGraph(){
-    let points=[];
-    for(let d=0;d<days;d++){
-        habits.forEach((h,i)=>{
-            if(data[h][d]) points.push({x:d+1,y:i+1});
-        });
-    }
-
-    if(chart) chart.destroy();
-
-    chart=new Chart(document.getElementById("chart"),{
-        type:"line",
-        data:{
-            datasets:[{
-                data:points,
-                borderColor:"#38bdf8",
-                backgroundColor:"#38bdf8",
-                fill:false,
-                tension:0,
-                pointRadius:5,
-                pointStyle:'rectRot'
-            }]
-        },
-        options:{
-            responsive:false,
-            plugins:{legend:{display:false}},
-            scales:{
-                x:{type:'linear',min:1,max:days,title:{display:true,text:"Day"},ticks:{color:"white"}},
-                y:{min:1,max:7,title:{display:true,text:"Habit Number"},ticks:{color:"white"}}
+const chart = new Chart(
+document.getElementById('dailyChart'),
+{
+    type:'scatter',
+    data:{ datasets },
+    options:{
+        scales:{
+            x:{
+                type:'linear',
+                min:1,
+                max:days,
+                title:{display:true,text:'Day'}
+            },
+            y:{
+                min:1,
+                max:10,
+                ticks:{ stepSize:1 },
+                title:{display:true,text:'Habit Number'}
             }
         }
-    });
+    }
+});
+
+/* UPDATE FUNCTION */
+
+function updateChart(day, habit, box){
+
+    const ds = datasets[habit-1];
+
+    if(box.checked){
+
+        ds.data.push({x:day, y:habit});
+
+    }else{
+
+        ds.data = ds.data.filter(p => !(p.x===day && p.y===habit));
+    }
+
+    chart.update();
+
+    updatePercentage(day);
 }
 
-function updateAll(){
-    document.getElementById("todayPercent").innerText=dailyPercent(todayIndex)+"%";
-    document.getElementById("monthlyPercent").innerText=monthlyPercent()+"%";
-    document.getElementById("currentStreak").innerText=streak();
-    updateGraph();
-}
+/* DAILY % */
 
-updateAll();
+function updatePercentage(day){
+
+    const row = document.querySelectorAll("#habitTable tbody tr")[day-1];
+    const checks = row.querySelectorAll("input");
+
+    let done = 0;
+    checks.forEach(c=>{ if(c.checked) done++; });
+
+    const percent = Math.round((done/habits)*100);
+
+    document.getElementById("p"+day).innerText = percent + "%";
+}
 
 </script>
-
-</body>
-</html>

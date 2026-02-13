@@ -1,108 +1,260 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Captain Lee Discipline OS</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+body{
+    background:#0b1220;
+    color:white;
+    font-family:Arial;
+    padding:20px;
+}
+
+h1{text-align:center}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#111827;
+}
+
+th,td{
+    border:1px solid #1f2937;
+    padding:6px;
+    text-align:center;
+    font-size:13px;
+}
+
+.habit-name{
+    text-align:left;
+    font-weight:bold;
+    background:#020617;
+    position:sticky;
+    left:0;
+}
+
+.section{
+    display:flex;
+    gap:20px;
+    margin-top:25px;
+}
+
+.card{
+    background:#111827;
+    border-radius:12px;
+    padding:20px;
+    flex:1;
+}
+
+canvas{max-height:350px}
+
+textarea{
+    width:100%;
+    height:180px;
+    background:#020617;
+    color:white;
+    border:1px solid #334155;
+    padding:10px;
+}
+
+button{
+    margin-top:10px;
+    padding:8px 16px;
+    background:#22d3ee;
+    border:none;
+    cursor:pointer;
+    font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<h1 id="title"></h1>
+
+<div id="setupBox" style="display:none">
+<h2>📅 Enter habits for this month (one per line)</h2>
+<textarea id="habitInput"></textarea>
+<button id="saveBtn">Save Habits</button>
+</div>
+
+<table id="habitTable"></table>
+
+<div class="section">
+
+<div class="card">
+<h2>📈 Daily Discipline</h2>
+<canvas id="lineChart"></canvas>
+</div>
+
+<div class="card">
+<h2>🧠 AI Discipline Coach</h2>
+<div id="aiBox">Start tracking…</div>
+</div>
+
+</div>
+
 <script>
 
-const habits = 10;
-const days = 28;
+/* ===== RUN ONLY AFTER PAGE LOAD ===== */
+window.onload = function(){
 
-const tbody = document.querySelector("#habitTable tbody");
+const now = new Date();
+const year = now.getFullYear();
+const month = now.getMonth();
 
-/* CREATE TABLE */
+const monthNames = [
+"January","February","March","April","May","June",
+"July","August","September","October","November","December"
+];
+
+const days = new Date(year, month + 1, 0).getDate();
+const key = `${year}-${month}`;
+
+document.getElementById("title").innerText =
+`🔥 Captain Lee — ${monthNames[month]} ${year} 🔥`;
+
+/* ===== LOAD HABITS ===== */
+
+let habits = JSON.parse(localStorage.getItem(key+"-habits"));
+
+if(!habits){
+
+document.getElementById("setupBox").style.display="block";
+
+document.getElementById("saveBtn").onclick = function(){
+
+const text = document.getElementById("habitInput").value.trim();
+if(!text) return;
+
+habits = text.split("\n").filter(h=>h.trim()!="");
+
+localStorage.setItem(key+"-habits", JSON.stringify(habits));
+location.reload();
+};
+
+return;
+}
+
+/* ===== BUILD TABLE ===== */
+
+const table = document.getElementById("habitTable");
+
+let header="<tr><th>Habits</th>";
+for(let d=1; d<=days; d++) header+=`<th>${d}</th>`;
+header+="</tr>";
+table.innerHTML=header;
+
+habits.forEach((habit,i)=>{
+
+let row=`<tr><td class='habit-name'>${habit}</td>`;
 
 for(let d=1; d<=days; d++){
 
-    const tr = document.createElement("tr");
-    let html = `<td>${d}</td>`;
+const id=`h${i}d${d}`;
+const saved = localStorage.getItem(key+"-"+id)=="1";
 
-    for(let h=1; h<=habits; h++){
-        html += `<td>
-        <input type="checkbox" onchange="updateChart(${d},${h},this)">
-        </td>`;
-    }
-
-    html += `<td id="p${d}">0%</td>`;
-    tr.innerHTML = html;
-    tbody.appendChild(tr);
+row+=`<td>
+<input type='checkbox'
+id='${id}'
+${saved?"checked":""}>
+</td>`;
 }
 
-/* COLORS FOR EACH HABIT */
-
-const colors = [
-"#ff4d6d","#4cc9f0","#ffd60a","#80ed99","#c77dff",
-"#ff9f1c","#00f5d4","#f72585","#90dbf4","#b8f2e6"
-];
-
-/* DATASET CREATE */
-
-const datasets = [];
-
-for(let i=1;i<=habits;i++){
-    datasets.push({
-        label: "Habit " + i,
-        data: [],
-        borderColor: colors[i-1],
-        backgroundColor: colors[i-1],
-        showLine: false,   // IMPORTANT ❌ no connecting line
-        pointRadius: 6
-    });
-}
-
-/* CHART */
-
-const chart = new Chart(
-document.getElementById('dailyChart'),
-{
-    type:'scatter',
-    data:{ datasets },
-    options:{
-        scales:{
-            x:{
-                type:'linear',
-                min:1,
-                max:days,
-                title:{display:true,text:'Day'}
-            },
-            y:{
-                min:1,
-                max:10,
-                ticks:{ stepSize:1 },
-                title:{display:true,text:'Habit Number'}
-            }
-        }
-    }
+row+="</tr>";
+table.innerHTML+=row;
 });
 
-/* UPDATE FUNCTION */
+/* ===== CREATE GRAPH ===== */
 
-function updateChart(day, habit, box){
+const lineChart = new Chart(
+document.getElementById("lineChart"),{
+type:'line',
+data:{
+labels:Array.from({length:days},(_,i)=>i+1),
+datasets:[{
+data:new Array(days).fill(0),
+borderColor:"#22d3ee",
+tension:0.3,
+pointRadius:3
+}]
+},
+options:{
+plugins:{legend:{display:false}},
+scales:{y:{beginAtZero:true,max:habits.length}}
+}
+});
 
-    const ds = datasets[habit-1];
+/* ===== UPDATE FUNCTION ===== */
 
-    if(box.checked){
+function update(){
 
-        ds.data.push({x:day, y:habit});
+let dailyTotals = [];
+let habitTotals = new Array(habits.length).fill(0);
 
-    }else{
+for(let d=1; d<=days; d++){
 
-        ds.data = ds.data.filter(p => !(p.x===day && p.y===habit));
-    }
+let total=0;
 
-    chart.update();
+habits.forEach((_,i)=>{
 
-    updatePercentage(day);
+const id=`h${i}d${d}`;
+const cb=document.getElementById(id);
+
+if(cb.checked){
+total++;
+habitTotals[i]++;
+localStorage.setItem(key+"-"+id,"1");
+}else{
+localStorage.removeItem(key+"-"+id);
+}
+});
+
+dailyTotals.push(total);
 }
 
-/* DAILY % */
+lineChart.data.datasets[0].data = dailyTotals;
+lineChart.update();
 
-function updatePercentage(day){
+/* AI */
 
-    const row = document.querySelectorAll("#habitTable tbody tr")[day-1];
-    const checks = row.querySelectorAll("input");
+let sum=dailyTotals.reduce((a,b)=>a+b,0);
+let max=habits.length*days;
+let percent=Math.round((sum/max)*100);
 
-    let done = 0;
-    checks.forEach(c=>{ if(c.checked) done++; });
+let best=habitTotals.indexOf(Math.max(...habitTotals));
+let worst=habitTotals.indexOf(Math.min(...habitTotals));
 
-    const percent = Math.round((done/habits)*100);
+let msg="";
 
-    document.getElementById("p"+day).innerText = percent + "%";
+if(percent>=80) msg="🔥 Elite discipline";
+else if(percent>=60) msg="⚡ Strong consistency";
+else if(percent>=40) msg="⚠️ Needs improvement";
+else msg="💀 Critical discipline";
+
+document.getElementById("aiBox").innerHTML=`
+Overall Score: ${percent}%<br>
+Best Habit: ${habits[best]}<br>
+Needs Work: ${habits[worst]}<br>
+Advice: ${msg}
+`;
 }
+
+/* ===== ADD EVENTS ===== */
+
+document.querySelectorAll("input[type=checkbox]").forEach(cb=>{
+cb.onchange = update;
+});
+
+/* LOAD SAVED DATA */
+update();
+
+};
 
 </script>
+
+</body>
+</html>                                                                                                                                                                                   
